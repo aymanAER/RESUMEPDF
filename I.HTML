@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تلخيص مستندات PDF بالذكاء الاصطناعي - نسخة محسنة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script>
+        // Spécifier le workerSrc pour PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f7fafc; /* bg-gray-100 */
+        }
+        .loader {
+            border: 6px solid #e5e7eb; /* bg-gray-200 */
+            border-top: 6px solid #3b82f6; /* blue-500 */
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .custom-file-input::-webkit-file-upload-button {
+            visibility: hidden;
+        }
+        .custom-file-input::before {
+            content: 'اختر ملف PDF';
+            display: inline-block;
+            background: #3b82f6; /* bg-blue-500 */
+            color: white;
+            border: 1px solid #3b82f6;
+            border-radius: 0.375rem; /* rounded-md */
+            padding: 0.5rem 1rem; /* py-2 px-4 */
+            outline: none;
+            white-space: nowrap;
+            cursor: pointer;
+            font-weight: 600; /* font-semibold */
+            margin-left: 10px; /* Pour RTL, cela le pousse vers la droite */
+        }
+        .custom-file-input:hover::before {
+            background: #2563eb; /* bg-blue-600 */
+        }
+        .custom-file-input:active::before {
+            background: #1d4ed8; /* bg-blue-700 */
+        }
+        #summaryOutput, #extractedTextPreview {
+            white-space: pre-wrap; /* Conserver les sauts de ligne et les espaces */
+            text-align: justify;
+        }
+        .copy-button {
+            transition: background-color 0.3s ease;
+        }
+        /* Style pour les boutons radio personnalisés (optionnel, Tailwind Forms peut mieux gérer cela) */
+        .form-radio {
+            appearance: none;
+            padding: 0;
+            display: inline-block;
+            vertical-align: middle;
+            background-origin: border-box;
+            user-select: none;
+            flex-shrink: 0;
+            height: 1rem;
+            width: 1rem;
+            color: #3b82f6; /* text-blue-600 */
+            background-color: #fff;
+            border-color: #6b7280; /* border-gray-500 */
+            border-width: 1px;
+            border-radius: 100%;
+        }
+        .form-radio:focus {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            --tw-ring-inset: var(--tw-empty,/*!*/ /*!*/);
+            --tw-ring-offset-width: 2px;
+            --tw-ring-offset-color: #fff;
+            --tw-ring-color: #3b82f6; /* ring-blue-600 */
+            --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+            --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+            box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+            border-color: #3b82f6; /* border-blue-600 */
+        }
+        .form-radio:checked {
+            background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e");
+            border-color: transparent;
+            background-color: currentColor;
+            background-size: 100% 100%;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+    <div class="container mx-auto p-4 md:p-8 max-w-3xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-600">تلخيص مستندات PDF بالذكاء الاصطناعي</h1>
+            <p class="text-gray-600 mt-2">قم برفع ملف PDF واحصل على ملخص دقيق لمحتواه باللغة العربية.</p>
+            </header>
+
+        <main class="bg-white p-6 md:p-8 rounded-xl shadow-2xl">
+            <div class="mb-6">
+                <label for="pdfFile" class="block text-lg font-semibold text-gray-700 mb-2">اختر ملف PDF:</label>
+                <div class="flex items-center">
+                    <input type="file" id="pdfFile" accept=".pdf" class="custom-file-input text-gray-700 text-sm">
+                    <span id="fileName" class="text-gray-500 mr-3">لم يتم اختيار أي ملف</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-lg font-semibold text-gray-700 mb-2">طول الملخص المطلوب:</label>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-6 sm:space-x-reverse space-y-2 sm:space-y-0">
+                    <div class="flex items-center">
+                        <input type="radio" id="summaryLengthShort" name="summaryLength" value="short" class="form-radio ml-2 focus:ring-blue-500 text-blue-600 border-gray-300" checked>
+                        <label for="summaryLengthShort" class="text-gray-700">موجز قصير (2-3 جمل)</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="radio" id="summaryLengthMedium" name="summaryLength" value="medium" class="form-radio ml-2 focus:ring-blue-500 text-blue-600 border-gray-300">
+                        <label for="summaryLengthMedium" class="text-gray-700">ملخص متوسط (فقرة أو اثنتين)</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="radio" id="summaryLengthDetailed" name="summaryLength" value="detailed" class="form-radio ml-2 focus:ring-blue-500 text-blue-600 border-gray-300">
+                        <label for="summaryLengthDetailed" class="text-gray-700">ملخص مفصل (شامل)</label>
+                    </div>
+                </div>
+            </div>
+
+            <button id="summarizeButton" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+                لخص الملف الآن
+            </button>
+
+            <div id="statusMessages" class="mt-6 text-center">
+                <div id="loader" class="loader hidden"></div>
+                <p id="loadingMessage" class="text-blue-500 font-semibold hidden"></p>
+                <p id="errorMessage" class="text-red-500 font-semibold p-3 bg-red-50 rounded-md hidden"></p>
+            </div>
+
+            <div id="extractedTextContainer" class="mt-8 hidden">
+                <h2 class="text-xl font-semibold text-gray-700 mb-3 border-b-2 border-gray-200 pb-2">النص المستخرج من PDF (معاينة أول 500 حرف)</h2>
+                <div id="extractedTextPreview" class="p-4 bg-gray-50 rounded-md max-h-40 overflow-y-auto text-sm text-gray-600 border border-gray-200">
+                    </div>
+            </div>
+
+            <div id="summaryContainer" class="mt-8 hidden">
+                <div class="flex justify-between items-center mb-3 border-b-2 border-gray-200 pb-2">
+                    <h2 class="text-2xl font-semibold text-gray-700">📜 الملخص</h2>
+                    <button id="copySummaryButton" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md text-sm shadow-sm copy-button">
+                        نسخ الملخص
+                    </button>
+                </div>
+                <div id="summaryOutput" class="p-4 bg-blue-50 rounded-md text-gray-800 leading-relaxed border border-blue-200">
+                    </div>
+                <p id="copyMessage" class="text-green-600 text-sm mt-2 text-center hidden">تم نسخ الملخص!</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Sélection des éléments du DOM
+        const pdfFileInput = document.getElementById('pdfFile');
+        const fileNameDisplay = document.getElementById('fileName');
+        const summarizeButton = document.getElementById('summarizeButton');
+        const loader = document.getElementById('loader');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const extractedTextContainer = document.getElementById('extractedTextContainer');
+        const extractedTextPreview = document.getElementById('extractedTextPreview');
+        const summaryContainer = document.getElementById('summaryContainer');
+        const summaryOutput = document.getElementById('summaryOutput');
+        const copySummaryButton = document.getElementById('copySummaryButton');
+        const copyMessage = document.getElementById('copyMessage');
+        const summaryLengthRadios = document.querySelectorAll('input[name="summaryLength"]');
+
+
+        // Mettre à jour l'affichage du nom du fichier lors de la sélection
+        pdfFileInput.addEventListener('change', () => {
+            if (pdfFileInput.files.length > 0) {
+                fileNameDisplay.textContent = pdfFileInput.files[0].name;
+                summarizeButton.disabled = false;
+                clearMessagesAndResults(); // Effacer les anciens messages et résultats
+            } else {
+                fileNameDisplay.textContent = 'لم يتم اختيار أي ملف';
+                summarizeButton.disabled = true;
+            }
+        });
+
+        summarizeButton.disabled = true; // Désactiver initialement le bouton
+
+        // Fonction pour afficher l'état de chargement
+        function showLoading(message) {
+            loader.classList.remove('hidden');
+            loadingMessage.textContent = message;
+            loadingMessage.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            summarizeButton.disabled = true;
+            extractedTextContainer.classList.add('hidden');
+            summaryContainer.classList.add('hidden');
+            copyMessage.classList.add('hidden');
+        }
+
+        // Fonction pour afficher un message d'erreur
+        function showError(message) {
+            loader.classList.add('hidden');
+            loadingMessage.classList.add('hidden');
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+            // Réactiver le bouton seulement si un fichier est sélectionné
+            summarizeButton.disabled = (pdfFileInput.files.length === 0);
+        }
+
+        // Fonction pour effacer tous les messages et résultats
+        function clearMessagesAndResults() {
+            loader.classList.add('hidden');
+            loadingMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            extractedTextContainer.classList.add('hidden');
+            extractedTextPreview.textContent = '';
+            summaryContainer.classList.add('hidden');
+            summaryOutput.textContent = '';
+            copyMessage.classList.add('hidden');
+        }
+
+        // Fonction pour extraire le texte d'un PDF
+        async function extractTextFromPdf(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const pdfData = new Uint8Array(event.target.result);
+                        // Charger le document PDF
+                        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+                        let fullText = '';
+                        // Itérer sur chaque page pour en extraire le contenu textuel
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            // Joindre les items de texte de la page
+                            const pageText = textContent.items.map(item => item.str).join(' ');
+                            fullText += pageText + '\n\n'; // Ajouter un double saut de ligne entre les pages pour la lisibilité
+                        }
+                        resolve(fullText.trim()); // Retourner le texte complet sans espaces superflus
+                    } catch (error) {
+                        console.error("Erreur lors de l'analyse du PDF:", error);
+                        reject("حدث خطأ أثناء قراءة أو تحليل ملف PDF. تأكد من أن الملف صالح وأن محتواه نصي.");
+                    }
+                };
+                reader.onerror = () => {
+                    // Gérer les erreurs de lecture du fichier
+                    reject("حدث خطأ أثناء قراءة الملف.");
+                };
+                reader.readAsArrayBuffer(file); // Lire le fichier comme un ArrayBuffer
+            });
+        }
+
+        // Fonction pour appeler l'API Gemini pour le résumé
+        async function getSummaryFromGemini(text, desiredLength) {
+            // C'est ici que vous placeriez votre clé API Gemini pour des tests locaux.
+            // Pour un site public, cette clé doit être protégée sur un serveur.
+            const apiKey = "AIzaSyBOmFv0f43ZcXK_lAN1kJs8dQ5PrSzskbw"; // <-- Placez votre clé API Gemini ici UNIQUEMENT pour tests locaux.
+
+            if (apiKey === "AIzaSyBOmFv0f43ZcXK_lAN1kJs8dQ5PrSzskbw" && !(typeof __APP_ID__ !== 'undefined')) { 
+                 console.warn("Clé API Gemini non configurée pour tests locaux. L'appel API va probablement échouer si l'environnement ne la fournit pas.");
+            }
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            let lengthInstruction = "";
+            if (desiredLength === "short") {
+                lengthInstruction = "يرجى تقديم ملخص موجز جداً في حدود 2 إلى 3 جمل رئيسية.";
+            } else if (desiredLength === "medium") {
+                lengthInstruction = "يرجى تقديم ملخص متوسط الطول، يتكون من فقرة واحدة أو فقرتين، يغطي النقاط الأساسية.";
+            } else if (desiredLength === "detailed") {
+                lengthInstruction = "يرجى تقديم ملخص مفصل وشامل قدر الإمكان، يغطي جميع الجوانب الهامة للنص.";
+            }
+
+            const prompt = `أنت مساعد ذكاء اصطناعي متخصص في تلخيص النصوص بدقة عالية. لقد تم استخراج النص التالي من مستند PDF. مهمتك هي تقديم ملخص شامل ودقيق لهذا النص باللغة العربية الفصحى. ${lengthInstruction} يجب أن يركز الملخص على الأفكار الرئيسية، الحجج الجوهرية، الأدلة المقدمة، والاستنتاجات الهامة الواردة في النص الأصلي. يرجى الحفاظ على موضوعية النص وتجنب إضافة أي معلومات خارجية أو آرائك الشخصية. يجب أن يكون الملخص واضحًا، منظمًا، وسهل الفهم للقارئ العربي. لا تقم بتضمين أي عبارات مثل "هذا النص يتحدث عن" أو "الملخص هو". ابدأ مباشرة بالتلخيص.\n\nالنص المستخرج:\n${text}`;
+
+            try {
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }]
+                };
+                // Envoyer la requête à l'API Gemini
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                // Gérer les réponses non-OK de l'API
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error("Données d'erreur de l'API:", errorData);
+                    let errorMessageDetail = errorData?.error?.message || 'تفاصيل الخطأ غير متوفرة.';
+                    if (response.status === 400 && errorData?.error?.message.toLowerCase().includes("api key not valid")) {
+                        errorMessageDetail = "مفتاح API المستخدم غير صالح. يرجى التحقق من المفتاح أو الاتصال بالدعم.";
+                    } else if (response.status === 403) {
+                         errorMessageDetail = "طلب مرفوض من خادم Gemini. قد يكون السبب مشكلة مع مفتاح API أو الأذونات.";
+                    }
+                    throw new Error(`خطأ في الاتصال بالخادم: ${response.status}. ${errorMessageDetail}`);
+                }
+
+                const result = await response.json();
+
+                // Vérifier la structure de la réponse et extraire le texte du résumé
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    console.error("Structure de réponse API inattendue:", result);
+                    throw new Error("لم يتم العثور على محتوى في استجابة Gemini API أو أن الاستجابة غير متوقعة.");
+                }
+            } catch (error) {
+                console.error("Erreur lors de l'appel à l'API Gemini:", error);
+                throw new Error(`حدث خطأ أثناء طلب الملخص من Gemini: ${error.message}`);
+            }
+        }
+
+        // Écouteur d'événement pour le bouton de résumé
+        summarizeButton.addEventListener('click', async () => {
+            const file = pdfFileInput.files[0];
+            // Vérifier si un fichier est sélectionné
+            if (!file) {
+                showError("الرجاء اختيار ملف PDF أولاً.");
+                return;
+            }
+            // Vérifier si le fichier est bien un PDF
+            if (file.type !== "application/pdf") {
+                showError("الرجاء اختيار ملف بصيغة PDF فقط.");
+                return;
+            }
+
+            let selectedLength = "short"; // Valeur par défaut
+            for (const radio of summaryLengthRadios) {
+                if (radio.checked) {
+                    selectedLength = radio.value;
+                    break;
+                }
+            }
+
+            clearMessagesAndResults(); // Effacer les messages précédents
+            showLoading("جاري استخلاص النص من ملف PDF...");
+
+            try {
+                // Extraire le texte du PDF
+                const extractedText = await extractTextFromPdf(file);
+                if (!extractedText || extractedText.trim().length === 0) {
+                    showError("لم يتمكن النظام من استخلاص أي نص من ملف PDF. قد يكون الملف صورة ممسوحة ضوئياً، فارغاً، أو محمياً.");
+                    return;
+                }
+
+                // Afficher un aperçu du texte extrait
+                extractedTextPreview.textContent = extractedText.substring(0, 500) + (extractedText.length > 500 ? "..." : ""); // Aperçu des 500 premiers caractères
+                extractedTextContainer.classList.remove('hidden');
+
+                showLoading("جاري إنشاء الملخص بواسطة الذكاء الاصطناعي...");
+                // Obtenir le résumé via l'API Gemini
+                const summary = await getSummaryFromGemini(extractedText, selectedLength);
+
+                // Afficher le résumé et le conteneur du résumé
+                summaryOutput.innerHTML = summary.replace(/\n/g, '<br>'); // Conserver les sauts de ligne du résumé
+                summaryContainer.classList.remove('hidden');
+                loader.classList.add('hidden'); // Cacher le chargeur
+                loadingMessage.classList.add('hidden'); // Cacher le message de chargement
+                summarizeButton.disabled = false; // Réactiver le bouton de résumé
+
+            } catch (error) {
+                // Gérer les erreurs survenues pendant le processus de résumé
+                console.error("Erreur du processus de résumé:", error);
+                showError(error.message || "حدث خطأ غير متوقع أثناء عملية التلخيص.");
+            }
+        });
+
+        // Écouteur d'événement pour le bouton "Copier le résumé"
+        copySummaryButton.addEventListener('click', () => {
+            const summaryText = summaryOutput.innerText; // Obtenir le texte brut du résumé
+            if (navigator.clipboard && window.isSecureContext) { // Utiliser l'API Clipboard si disponible et sécurisée
+                navigator.clipboard.writeText(summaryText)
+                    .then(() => {
+                        copyMessage.textContent = 'تم نسخ الملخص بنجاح!';
+                        copyMessage.classList.remove('hidden');
+                        setTimeout(() => copyMessage.classList.add('hidden'), 2000); // Cacher le message après 2 secondes
+                    })
+                    .catch(err => {
+                        console.error('Erreur lors de la copie du résumé (API Clipboard):', err);
+                        copyMessage.textContent = 'فشل النسخ. الرجاء النسخ يدوياً.';
+                        copyMessage.classList.remove('hidden');
+                        copyMessage.classList.replace('text-green-600', 'text-red-600');
+                        setTimeout(() => {
+                             copyMessage.classList.add('hidden');
+                             copyMessage.classList.replace('text-red-600', 'text-green-600');
+                        }, 3000);
+                    });
+            } else { // Solution de repli pour les navigateurs plus anciens ou contextes non sécurisés
+                const textArea = document.createElement("textarea");
+                textArea.value = summaryText;
+                textArea.style.position = "fixed"; // Empêcher le défilement vers le bas de la page
+                textArea.style.left = "-9999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    copyMessage.textContent = 'تم نسخ الملخص بنجاح!';
+                    copyMessage.classList.remove('hidden');
+                    setTimeout(() => copyMessage.classList.add('hidden'), 2000);
+                } catch (err) {
+                    console.error('Erreur lors de la copie du résumé (execCommand):', err);
+                    copyMessage.textContent = 'فشل النسخ. الرجاء النسخ يدوياً.';
+                    copyMessage.classList.remove('hidden');
+                    copyMessage.classList.replace('text-green-600', 'text-red-600');
+                    setTimeout(() => {
+                        copyMessage.classList.add('hidden');
+                        copyMessage.classList.replace('text-red-600', 'text-green-600');
+                    }, 3000);
+                }
+                document.body.removeChild(textArea);
+            }
+        });
+
+    </script>
+</body>
+</html>
